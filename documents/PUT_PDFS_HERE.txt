@@ -1,0 +1,1 @@
+Copy PDF files into this folder, then start the app or press "Reindex folder".
