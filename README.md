@@ -4,6 +4,8 @@ Study RAG is a small local web app for asking questions about PDF documents. It 
 
 I built this project to understand how RAG systems work in practice.
 
+![Study RAG interface](assets/app-preview.png)
+
 ## Features
 
 - Load every PDF from the `documents` folder automatically
