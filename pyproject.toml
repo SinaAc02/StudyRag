@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "studyrag"
+version = "0.1.0"
+description = "A native desktop study assistant with local document retrieval and follow-up chat."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Education",
+]
+dependencies = [
+    "PySide6-Essentials>=6.8,<7",
+    "numpy>=2,<3",
+    "paddleocr[doc-parser]>=3.7,<3.8",
+    "PyMuPDF>=1.24,<2",
+    "sentence-transformers>=5.5,<6",
+    "transformers>=4.57.6,<5",
+]
+
+[project.urls]
+Repository = "https://github.com/SinaAc02/StudyRag"
+Issues = "https://github.com/SinaAc02/StudyRag/issues"
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "ruff>=0.8,<1", "build>=1.2,<2"]
+
+[project.scripts]
+studyrag = "studyrag.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E9", "F"]

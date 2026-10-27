@@ -1,113 +1,185 @@
-# Study RAG
+# StudyRag
 
-Study RAG is a small local web app for asking questions about PDF documents. It finds the most relevant parts of the PDFs and gives them to a local language model, which answers with the source filenames and page numbers.
+StudyRag is a local desktop app for studying English, German and Persian PDFs.
+It extracts text, tables and formulas, searches your library, and answers questions
+through Ollama with PDF and page references. You can continue a conversation,
+ask for an explanation, compare topics or generate a quiz.
 
-I built this project to understand how RAG systems work in practice.
-
-![Study RAG interface](assets/app-preview.png)
-
-## Features
-
-- Load every PDF from the `documents` folder automatically
-- Keep the filename and page number for every piece of text
-- Create embeddings with BGE-M3
-- Search the embeddings with an in-memory Qdrant database
-- Generate answers locally with Gemma through Ollama
-- Show the PDF pages used for each answer
-- Rebuild the index from the browser
-- Run locally without uploading the PDFs to a cloud service
-
-## Requirements
-
-- Python 3.11 or newer
-- Ollama
-- Around 6 GB of free disk space for the Python environment and default models
-- NVIDIA GPU recommended (CPU inference works but is slower)
-
-The project was developed and tested with an NVIDIA RTX 4070 Ti.
+Version 0.1.0 is an early release for Windows and Python 3.12.
 
 ## Setup
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-ollama pull gemma3:1b
-```
+You need 64-bit Python 3.12, a compatible NVIDIA GPU runtime and a running
+[Ollama](https://ollama.com/) installation. The current OCR backend requires
+PaddlePaddle GPU; the window can open without loading it.
 
-Make sure Ollama is running, copy PDF files into the `documents` folder and start the app:
+From the project directory, on the Windows CUDA 12.6 setup:
 
 ```powershell
-.\start-study-rag.cmd
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install paddlepaddle-gpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+New-Item -ItemType Directory -Force material
+ollama pull qwen3.5:9b
+.\.venv\Scripts\python.exe -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 ```
 
-Then open <http://127.0.0.1:8000>.
+The last two commands download the language and embedding models. OCR models
+are downloaded to `models/paddlex/` on first use, unless
+`PADDLE_PDX_CACHE_HOME` points elsewhere. A compatible NVIDIA driver and the
+runtime libraries required by PaddlePaddle must already be installed. The full
+AI/GPU stack has not been validated with a fresh install.
 
-On the first start, BGE-M3 is downloaded into `data/model_cache`. It stays there and is reused on later starts. The app does create fresh PDF embeddings every time it starts, but those vectors are stored only in memory and disappear when the app closes.
+## Using the app
 
-## Models
+1. Double-click `StudyRag.cmd`.
+2. Select a folder containing your PDFs and click **Update library**.
+3. Choose a study mode, type a question and press **Send**.
+4. Continue with follow-ups, or use **New chat** to start another conversation.
 
-The project has two models configured by default:
+The conversation selector reopens saved chats. Each answer has its own sources;
+double-click a source to open its PDF. The cited page is shown in the source list.
+Persian messages use right-to-left text direction.
 
-| Purpose | Model | Approximate download |
-|---|---|---:|
-| Create embeddings and search the PDFs | `BAAI/bge-m3` | 2.3 GB |
-| Generate the final answer | `gemma3:1b` | 815 MB |
+This is a native PySide6 window. It does not need a browser or an application web
+server. OCR, indexing and generation run in child processes so the window stays
+responsive. Closing it stops its workers. After study requests, the app attempts
+to unload the configured generation model without stopping the Ollama service.
+**Updating the library unloads all loaded Ollama models before OCR** to free GPU
+memory, which can affect other applications using that service.
 
-The default language model is set to `gemma3:1b` in the code. It is a small download and works well for testing the project on an ordinary computer. It can be replaced with any compatible Ollama model. Some useful alternatives are:
+Completed answers and their sources are saved in `data/chats.sqlite`. Cancelled
+or failed drafts are not saved. Chats belong to the selected library and survive
+index updates. A follow-up retrieves fresh passages and includes up to four
+recent completed turns, within a 10,000-character history budget. Older messages
+remain saved but may fall outside the model's context.
 
-| Model | Approximate download | Recommendation |
-|---|---:|---|
-| `gemma3:1b` | 815 MB | Default and smallest option; fast, but less detailed |
-| `qwen3:1.7b` | 1.4 GB | Small download and faster, but weaker answers |
-| `qwen3:4b` | 2.5 GB | Recommended balance between size and answer quality |
-| `qwen3:8b` | 5.2 GB | Better answers, but requires more memory and disk space |
-
-To change the model for one PowerShell session, download it and set `OLLAMA_MODEL` before starting the app:
+For a console with diagnostics:
 
 ```powershell
-ollama pull qwen3:4b
-$env:OLLAMA_MODEL = "qwen3:4b"
-.\start-study-rag.cmd
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python.exe -B -m studyrag desktop
 ```
 
-If a model name is changed without first running `ollama pull`, Ollama may download it when it is first requested. Downloading it yourself first makes the setup predictable.
+Launcher errors and worker diagnostics go to `data/desktop.log`.
+`StudyRag.cmd --check` checks Python and Qt without starting the app or models.
 
-## How it works
+## Extraction and retrieval
 
-- `rag.py` reads the PDFs with PyMuPDF and splits every page into smaller overlapping chunks.
-- BGE-M3 turns the chunks and the user's question into vectors.
-- Qdrant compares the question vector with the chunk vectors and returns the eight most relevant chunks.
-- Ollama sends those chunks to Gemma together with the question.
-- `models.py` defines the data used for questions, answers, chunks and sources.
-- `app.py` connects the RAG code to FastAPI and serves the website.
-- `static/` contains the HTML, CSS and JavaScript interface.
+PyMuPDF reads pages with a usable text layer. Sparse text, substantial images or
+vector graphics, and detected mathematical content trigger full-page
+PP-StructureV3 OCR. Native text is retained alongside the OCR result.
 
-The PDF text is used as context for the answer. If the retrieved chunks do not contain enough information, the model is instructed to say so instead of pretending that the answer came from the documents.
+The OCR pipeline uses mobile text detection and Latin/Arabic recognizers,
+PP-FormulaNet_plus-L for formulas, and separate table structure and cell models.
+It keeps formula LaTeX and table HTML in the index. Text lines are recognized in
+both scripts, with confidence used to select a result. Chart interpretation is
+disabled. Routing and script selection use heuristics and can make mistakes.
 
-## Project files
+Images are limited to a 2,000-pixel longest side, text detection to 1,536 pixels,
+and inference batches to one. Paddle defaults to a 6,144 MB allocation budget;
+CUDA and driver allocations sit outside that budget. GPU errors are reported
+rather than retried on CPU.
 
-```text
-StudyRag/
-|-- app.py                 FastAPI server and API endpoints
-|-- rag.py                 PDF reading, embeddings, search and Ollama call
-|-- models.py              Request and response data models
-|-- documents/             Put PDF files here
-|-- static/                Browser interface
-|-- tests/                 Automated tests
-|-- requirements.txt       Python dependencies
-`-- start-study-rag.cmd    Windows start command
-```
+Unchanged PDFs reuse extracted pages, blocks and chunks when their hashes,
+paths and processing settings match. Unchanged chunks reuse embeddings for the
+same model. Interrupted updates keep completed documents for the next attempt;
+the unfinished document starts again. Removing a PDF from the selected folder
+removes its index entries without deleting the source file.
 
-## Tests
+Retrieval combines `intfloat/multilingual-e5-small` embeddings with SQLite FTS5
+keyword search. Answers use `qwen3.5:9b` by default. All models are pretrained;
+indexing your PDFs does not fine-tune them.
+
+An update builds `data/studyrag.building.sqlite`, validates it, and activates it
+as `data/studyrag.sqlite`. The preceding library is kept as
+`data/studyrag.previous.sqlite`. The active library stays available while its
+replacement is being built. Changes to the extraction policy, schema or OCR
+model require another **Update library** before new results take effect.
+
+See [SPEC.md](SPEC.md) for the design constraints and
+`src/studyrag/settings.py` for defaults. Source checkouts store local data beside
+the source. Installed wheels use `%LOCALAPPDATA%\StudyRag` on Windows or XDG user
+data storage on Unix. Set `STUDYRAG_HOME` to choose another writable location.
+
+## Quality limits
+
+Check important numbers and formulas against the PDF. Persian digits, word
+boundaries and formula symbols can be misread, and full-page OCR can be less
+accurate than a page's native text. Earlier spot checks used the Plus S formula
+recognizer; the current Plus L recognizer has not been benchmarked here.
+
+Answers stream as tentative text. The final answer is accepted only if its
+citation markers refer to retrieved sources. This validates marker IDs, not the
+truth of every claim. Follow-up topic detection is also heuristic and can miss
+ambiguous references.
+
+Offline tests cover the backend, streaming and Qt interactions using simulated
+models. They do not measure OCR speed, VRAM use or live multi-turn Qwen quality.
+
+## Command line
+
+These commands use the same library defaults as the desktop app:
 
 ```powershell
-python -m pytest -q tests
+.\.venv\Scripts\python.exe -m studyrag scan .\material
+.\.venv\Scripts\python.exe -m studyrag ingest .\material
+.\.venv\Scripts\python.exe -m studyrag index
+.\.venv\Scripts\python.exe -m studyrag search "What is correlation?" --top-k 5
+.\.venv\Scripts\python.exe -m studyrag ask "Explain correlation" --mode explain
 ```
 
-## Troubleshooting
+The CLI buffers the final answer; the desktop streams it. `desktop` accepts
+`--database` and `--material` for alternate paths. Without an editable install,
+set `PYTHONPATH=src` before running the commands.
 
-- **`503 Service Unavailable`**: Start Ollama and make sure the selected model has been downloaded.
-- **No indexed PDFs**: Put at least one `.pdf` file in `documents`, then restart the app or press **Reindex folder**.
-- **Slow first start**: The embedding model is downloaded once, then each PDF is read and embedded.
+## Development
+
+The offline suite can run without Torch, Paddle or downloaded models:
+
+```powershell
+py -3.12 -m venv .test-venv
+.\.test-venv\Scripts\python.exe -m pip install -r requirements-test.txt
+.\.test-venv\Scripts\python.exe -m pip install --no-deps -e .
+$env:QT_QPA_PLATFORM = "offscreen"
+New-Item -ItemType Directory -Force work
+.\.test-venv\Scripts\python.exe -m ruff check src scripts
+.\.test-venv\Scripts\python.exe -m ruff format --check src scripts tests
+.\.test-venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider --basetemp work/pytest
+.\.test-venv\Scripts\python.exe -m build
+.\.test-venv\Scripts\python.exe scripts/check_release.py
+```
+
+GitHub Actions runs the offline checks on Windows and Ubuntu with Python 3.12.
+
+The Python package is split into `desktop/`, `ingestion/`, `retrieval/` and
+`study/`. `preparation.py` coordinates library updates. Tests live in `tests/`.
+
+To evaluate retrieval on your own material, copy
+`docs/retrieval-cases.example.json` to `work/`, replace its queries and expected
+filename fragments, then run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/benchmark_retrieval.py --database data/studyrag.sqlite --cases work/my-cases.json
+```
+
+This measures source retrieval, not generated answer correctness.
+
+## Source releases
+
+Run `python scripts/check_release.py` before staging files. It audits the public
+source set, checks for tracked private files, and looks for common credential
+formats without printing their values. The credential check is heuristic.
+
+To export a new source archive:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/check_release.py --archive dist/StudyRag-source-v0.1.0.zip
+```
+
+The command refuses to overwrite an existing archive. PDFs, databases, chats,
+logs, model weights, environments, backups and working files are excluded from
+Git and source exports. Avoid uploading an unfiltered copy of the local folder.
+
+No project license has been assigned. Dependency and model terms still apply;
+see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

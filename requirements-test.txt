@@ -1,0 +1,7 @@
+# Offline tests intentionally do not install OCR, Torch, Ollama or model weights.
+pytest>=8,<10
+numpy>=2,<3
+PyMuPDF>=1.24,<2
+PySide6-Essentials>=6.8,<7
+ruff>=0.8,<1
+build>=1.2,<2

@@ -1,0 +1,14 @@
+[
+  {
+    "query": "What is Pearson correlation?",
+    "expected_filename_contains": "replace-with-your-statistics-filename"
+  },
+  {
+    "query": "Was ist Sampling Bias?",
+    "expected_filename_contains": "replace-with-your-bias-filename"
+  },
+  {
+    "query": "همبستگی پیرسون چیست؟",
+    "expected_filename_contains": "replace-with-your-persian-filename"
+  }
+]

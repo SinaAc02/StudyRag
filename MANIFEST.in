@@ -1,0 +1,14 @@
+include README.md SPEC.md THIRD_PARTY_NOTICES.md pyproject.toml
+include StudyRag.cmd .gitignore .gitattributes requirements-test.txt
+recursive-include src *.py
+recursive-include tests *.py
+recursive-include scripts *.py
+recursive-include docs *.md *.json
+recursive-include .github *.yml
+prune data
+prune material
+prune models
+prune .venv
+prune work
+prune graphify-out
+global-exclude *.py[cod] *.pdf *.sqlite *.db *.log *.gguf *.safetensors *.pdparams *.pdiparams *.onnx
