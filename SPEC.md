@@ -1,71 +1,76 @@
-# StudyRag specification
+# StudyRag design
 
-## Goal and scope
+StudyRag is a desktop app for studying English, German and Persian learning and
+reference PDFs. PySide6 Qt Widgets provides the interface; Python services handle
+document preparation, retrieval and generation. The command-line tools expose
+the same services for scanning, ingestion, indexing, search and questions.
 
-A simple native desktop assistant for studying English, German and Persian
-learning/source PDFs. The UI is PySide6 Qt Widgets; application services remain
-Python modules. No browser, web server or heartbeat is part of the desktop path.
-Example exams are not a supported separate input or a generation target.
+## Document preparation
 
-## Extraction and persistence
+The app discovers PDFs in the selected folder and hashes their contents. PyMuPDF
+extracts native text and positioned blocks. Pages with sparse or damaged text,
+substantial visual content or detected mathematics go through full-page
+PP-StructureV3 OCR. The index stores the native extraction alongside OCR results.
 
-- Discover/hash PDFs without modifying source files.
-- Preserve native text, page references and positioned text blocks.
-- Use native extraction for usable text and selective full-page PP-StructureV3 for
-  sparse/damaged text or substantive visual/math content.
-- Preserve formula LaTeX and table HTML with dedicated recognition models; use
-  PP-FormulaNet_plus-L for formulas, mobile Latin/Arabic OCR, bounded images,
-  batch size one and a Paddle GPU
-  allocation budget to leave headroom on the 12 GB GPU. Do not retry on CPU.
-- Keep native evidence even when OCR supplies searchable text.
-- Keep chunks within document/page boundaries and record logical regions.
-- Persist pages, blocks, chunks, processing keys and vectors in SQLite.
-- Cache complete unchanged documents and vectors for unchanged chunks/models.
-- Invalidate incompatible extraction settings; prune sources absent from the folder.
-- Resume completed documents from compatible interrupted staging builds.
-- Retain the active library until a validated replacement is ready; keep a backup.
-- Recheck source hashes and schema/policy version before activation.
+OCR uses mobile Latin and Arabic/Persian text recognizers, dedicated table
+models and PP-FormulaNet_plus-L. Table HTML and formula LaTeX are stored with
+page blocks. Image dimensions, batch size and Paddle allocations are bounded to
+fit the target 12 GB GPU. GPU inference failures stop preparation and report an
+error.
 
-## Retrieval and study
+Chunks belong to a single document and page. Logical region IDs associate
+related blocks for retrieval. SQLite stores documents, pages, blocks, chunks,
+processing keys and embedding vectors.
 
-- Use multilingual E5 query/passage prefixes and normalized vectors.
-- Combine semantic retrieval and FTS5 ranks; deduplicate/expand logical regions.
-- Retrieve bounded evidence before answer, explain, compare and quiz generation.
-- Use an installed local Ollama model with streaming enabled.
-- Validate final citation markers against real source paths and page numbers.
-- Show explicit errors for incomplete streams or invalid/missing citations.
-- Show tentative output during generation, clear failed drafts, and render final
-  Markdown and Persian text direction after validation.
-- Support follow-up conversations using role-based Ollama chat messages and fresh
-  retrieval for every question. Carry the recent topic into common short follow-ups.
-- Supply at most four completed prior turns within a 10,000-character history
-  budget, bounded fresh passages, and a 16,384-token chat context window.
-- Treat previous answers as conversation context rather than source evidence;
-  validate citation IDs against the current turn's retrieved passages only.
+Matching file hashes, paths and processing keys allow complete documents to be
+reused. Vectors are reused for unchanged chunks and the same embedding model.
+An interrupted build resumes from its completed documents. Removed sources are
+pruned from the index; the selected PDF folder remains under the user's control.
 
-## Native interface and lifecycle
+Preparation writes a staging database. Activation checks source hashes,
+extraction metadata, schema and processing versions, and embeddings. A validated
+build becomes the active library, with the preceding library kept as a backup.
+SQLite's online backup API coordinates activation with readers on Windows.
 
-- Provide a folder picker, library readiness/counts/progress, mode selector,
-  question input, streamed answer, cancellation and PDF/page source list.
-- Keep a transcript with saved-chat selection and New chat. Persist completed
-  turns and per-answer sources in a separate chats.sqlite database scoped to the
-  document index and material folder, surviving index replacement.
-- Save only after successful worker completion. Failed/cancelled drafts leave
-  prior history intact and never enter the model's conversation context.
-- Startup checks readiness; library preparation starts on Update library.
-- Keep model and OCR work off the Qt UI thread.
-- Run study generation in an owned child process with JSON pipes, not HTTP UI
-  endpoints; pass the question through stdin rather than shell arguments.
-- Use window-close events to cancel preparation and stop owned processes.
-- Release the embedding child runtime on completion/cancellation. Best-effort
-  shutdown unloads only the configured generation model after a study request.
-- Preserve the existing pre-OCR Ollama unloading policy for GPU availability.
-- Keep source/core CLI tools; retire the browser server, static frontend and
-  browser-session lifecycle helpers.
+## Search and answers
 
-## Verification boundaries
+Retrieval combines normalized multilingual E5 embeddings with SQLite FTS5 ranks.
+E5 inputs use the model's query and passage prefixes. Matching logical regions
+are deduplicated and expanded before their passages are supplied to generation.
 
-- Automated tests cover incremental reuse, activation failures, native/OCR
-  routing, streaming protocol, citation errors and Qt worker/lifecycle behavior.
-- GUI/model fixtures do not establish live OCR accuracy, GPU throughput or real
-  Qwen answer quality. Those require a separately controlled runtime check.
+Answer, explain, compare and quiz modes use a local Ollama model. Output streams
+into the transcript as a draft. Citation checks resolve source markers to the
+retrieved PDFs and page numbers. A successful answer is rendered as Markdown
+with its sources; incomplete streams and citation errors discard the draft and
+display an error. Persian messages use right-to-left text direction.
+
+Follow-ups use Ollama chat messages and retrieve fresh passages for each
+question. A topic heuristic connects common short follow-ups to the recent
+conversation. Up to four completed turns fit within a 10,000-character history
+budget, alongside bounded fresh passages in a 16,384-token context window.
+Each answer's source IDs refer to that turn's retrieved passages.
+
+## Desktop and storage
+
+The window provides a folder picker, library status and progress, study modes,
+a chat transcript, saved-chat selection, a message composer, cancellation and
+sources grouped by answer. Startup checks library readiness. **Update library**
+starts preparation.
+
+Completed turns and their sources are saved after successful worker completion
+in a separate `chats.sqlite` database. Chats are scoped to the document index
+and material folder and survive index replacement. Failed or cancelled drafts
+are discarded while earlier messages remain available.
+
+OCR, indexing and generation run in child processes. Study requests travel over
+stdin as JSON; workers return JSON events over stdout. Closing the window stops
+its workers. Completion or cancellation releases the embedding process, and
+shutdown attempts to unload the configured generation model. Preparation
+unloads loaded Ollama models before OCR to free GPU memory.
+
+## Testing
+
+The automated suite covers document reuse, activation failures, OCR routing,
+streaming, citations, chat persistence and Qt worker lifecycle. Model fixtures
+exercise these paths offline. OCR accuracy, GPU performance and live answer
+quality require evaluation on representative PDFs with the installed models.

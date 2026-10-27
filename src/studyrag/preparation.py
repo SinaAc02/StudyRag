@@ -41,7 +41,7 @@ def _invalid_document_processing_count(connection: sqlite3.Connection) -> int:
 
 
 def _invalid_page_count(connection: sqlite3.Connection) -> int:
-    """Accept completed native-layout pages and supported OCR pages, never NULL engines."""
+    """Count pages with incomplete or incompatible extraction metadata."""
     return connection.execute(
         "SELECT COUNT(*) FROM pages p WHERE COALESCE("
         "(p.text_source = 'ocr' AND p.ocr_engine = ?) OR "
@@ -302,7 +302,7 @@ class PreparationCoordinator:
         )
 
     def _activate_staging(self) -> None:
-        """Publish a validated build without replacing an open Windows file.
+        """Activate a validated build through SQLite's online backup API.
 
         Status readers may briefly hold the stable database filename open.
         SQLite's backup API coordinates with those readers, whereas os.replace()

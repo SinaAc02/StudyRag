@@ -247,7 +247,7 @@ class IngestionStore:
             )
 
     def remove_missing_documents(self, paths: set[str]) -> None:
-        """Prune only index rows for sources absent from the selected library."""
+        """Remove index rows for sources absent from the selected library."""
         with self._connection() as connection:
             connection.execute("PRAGMA foreign_keys = ON")
             removed = [

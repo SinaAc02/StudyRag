@@ -22,7 +22,7 @@ _HORIZONTAL_SPACE_RE = re.compile(r"[^\S\r\n]+")
 def normalize_for_search(text: str) -> str:
     """Normalize multilingual text for indexing while retaining line boundaries.
 
-    Raw extracted text is stored separately and must remain the citation evidence.
+    Raw extracted text is stored separately for source citations.
     """
 
     normalized = unicodedata.normalize("NFKC", text)

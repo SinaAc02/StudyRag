@@ -207,8 +207,7 @@ def stream_answer_question(
     """Yield tentative text, followed by a citation-validated final answer."""
     history = bounded_history(history)
     prompt, results = _prepare_question(database_path, embedder, question, top_k, mode, history)
-    # Keep source evidence bounded as conversation context grows. Citation indices
-    # must refer only to passages actually supplied in this turn.
+    # Bound the source context, then assign citation IDs to the selected passages.
     budget = 10000
     selected = []
     for result in results:
@@ -225,7 +224,7 @@ def stream_answer_question(
     if callable(getattr(generator, "stream_chat", None)):
         stream = generator.stream_chat(_chat_messages(prompt, history))
     else:
-        # Preserve compatibility with text-generator integrations and CLI fixtures.
+        # Text generators receive conversation history as part of the prompt.
         if history:
             prompt = (
                 "Conversation context (not source evidence):\n"

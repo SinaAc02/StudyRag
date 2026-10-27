@@ -21,7 +21,7 @@ class OllamaGenerator:
     timeout_seconds: float = 300.0
 
     def unload(self) -> None:
-        """Release this configured model only; do not unload unrelated models."""
+        """Request an unload for the configured Ollama model."""
         request = Request(
             f"{self.base_url.rstrip('/')}/api/generate",
             data=json.dumps({"model": self.model, "keep_alive": 0, "stream": False}).encode(),

@@ -10,8 +10,8 @@ Version 0.1.0 is an early release for Windows and Python 3.12.
 ## Setup
 
 You need 64-bit Python 3.12, a compatible NVIDIA GPU runtime and a running
-[Ollama](https://ollama.com/) installation. The current OCR backend requires
-PaddlePaddle GPU; the window can open without loading it.
+[Ollama](https://ollama.com/) installation. OCR uses PaddlePaddle GPU, which loads
+when the library needs document recognition.
 
 From the project directory, on the Windows CUDA 12.6 setup:
 
@@ -27,8 +27,8 @@ ollama pull qwen3.5:9b
 The last two commands download the language and embedding models. OCR models
 are downloaded to `models/paddlex/` on first use, unless
 `PADDLE_PDX_CACHE_HOME` points elsewhere. A compatible NVIDIA driver and the
-runtime libraries required by PaddlePaddle must already be installed. The full
-AI/GPU stack has not been validated with a fresh install.
+runtime libraries required by PaddlePaddle must already be installed. Fresh-install
+validation of the full AI/GPU stack is still pending.
 
 ## Using the app
 
@@ -41,15 +41,15 @@ The conversation selector reopens saved chats. Each answer has its own sources;
 double-click a source to open its PDF. The cited page is shown in the source list.
 Persian messages use right-to-left text direction.
 
-This is a native PySide6 window. It does not need a browser or an application web
-server. OCR, indexing and generation run in child processes so the window stays
-responsive. Closing it stops its workers. After study requests, the app attempts
-to unload the configured generation model without stopping the Ollama service.
+The PySide6 window runs OCR, indexing and generation in child processes so it
+stays responsive. Closing it stops its workers. After study requests, the app
+attempts to unload the configured generation model. The shared Ollama service
+continues running.
 **Updating the library unloads all loaded Ollama models before OCR** to free GPU
 memory, which can affect other applications using that service.
 
 Completed answers and their sources are saved in `data/chats.sqlite`. Cancelled
-or failed drafts are not saved. Chats belong to the selected library and survive
+or failed drafts are discarded. Chats belong to the selected library and survive
 index updates. A follow-up retrieves fresh passages and includes up to four
 recent completed turns, within a 10,000-character history budget. Older messages
 remain saved but may fall outside the model's context.
@@ -62,7 +62,7 @@ $env:PYTHONPATH = "src"
 ```
 
 Launcher errors and worker diagnostics go to `data/desktop.log`.
-`StudyRag.cmd --check` checks Python and Qt without starting the app or models.
+`StudyRag.cmd --check` runs a startup dependency check for Python and Qt.
 
 ## Extraction and retrieval
 
@@ -78,18 +78,18 @@ disabled. Routing and script selection use heuristics and can make mistakes.
 
 Images are limited to a 2,000-pixel longest side, text detection to 1,536 pixels,
 and inference batches to one. Paddle defaults to a 6,144 MB allocation budget;
-CUDA and driver allocations sit outside that budget. GPU errors are reported
-rather than retried on CPU.
+CUDA and driver allocations sit outside that budget. GPU inference errors stop
+the operation and appear in the app.
 
 Unchanged PDFs reuse extracted pages, blocks and chunks when their hashes,
 paths and processing settings match. Unchanged chunks reuse embeddings for the
 same model. Interrupted updates keep completed documents for the next attempt;
 the unfinished document starts again. Removing a PDF from the selected folder
-removes its index entries without deleting the source file.
+removes its index entries. Source PDFs stay in their original location.
 
 Retrieval combines `intfloat/multilingual-e5-small` embeddings with SQLite FTS5
-keyword search. Answers use `qwen3.5:9b` by default. All models are pretrained;
-indexing your PDFs does not fine-tune them.
+keyword search. Answers use `qwen3.5:9b` by default. The models are pretrained;
+indexing supplies passages from your PDFs as context for each question.
 
 An update builds `data/studyrag.building.sqlite`, validates it, and activates it
 as `data/studyrag.sqlite`. The preceding library is kept as
@@ -106,16 +106,16 @@ data storage on Unix. Set `STUDYRAG_HOME` to choose another writable location.
 
 Check important numbers and formulas against the PDF. Persian digits, word
 boundaries and formula symbols can be misread, and full-page OCR can be less
-accurate than a page's native text. Earlier spot checks used the Plus S formula
-recognizer; the current Plus L recognizer has not been benchmarked here.
+accurate than a page's native text. The Plus L formula recognizer still needs a
+benchmark on representative documents.
 
-Answers stream as tentative text. The final answer is accepted only if its
-citation markers refer to retrieved sources. This validates marker IDs, not the
-truth of every claim. Follow-up topic detection is also heuristic and can miss
-ambiguous references.
+Answers stream as drafts, then pass a citation-marker check. Sources help you
+verify the answer against the PDF; the model can still make unsupported claims.
+Follow-up topic detection uses a heuristic and can miss ambiguous references.
 
 Offline tests cover the backend, streaming and Qt interactions using simulated
-models. They do not measure OCR speed, VRAM use or live multi-turn Qwen quality.
+models. OCR speed, VRAM use and live multi-turn Qwen quality need separate
+measurement with the installed models.
 
 ## Command line
 
@@ -130,12 +130,12 @@ These commands use the same library defaults as the desktop app:
 ```
 
 The CLI buffers the final answer; the desktop streams it. `desktop` accepts
-`--database` and `--material` for alternate paths. Without an editable install,
-set `PYTHONPATH=src` before running the commands.
+`--database` and `--material` for alternate paths. For source runs, use an editable
+installation or set `PYTHONPATH=src` before running the commands.
 
 ## Development
 
-The offline suite can run without Torch, Paddle or downloaded models:
+The offline suite uses a separate environment with the test and UI dependencies:
 
 ```powershell
 py -3.12 -m venv .test-venv
@@ -163,13 +163,15 @@ filename fragments, then run:
 .\.venv\Scripts\python.exe scripts/benchmark_retrieval.py --database data/studyrag.sqlite --cases work/my-cases.json
 ```
 
-This measures source retrieval, not generated answer correctness.
+The report shows whether each query retrieves the expected document. Answer
+quality can be evaluated separately against those passages.
 
 ## Source releases
 
 Run `python scripts/check_release.py` before staging files. It audits the public
 source set, checks for tracked private files, and looks for common credential
-formats without printing their values. The credential check is heuristic.
+formats. Findings show the file, line and credential type. The check uses a
+limited set of patterns, so review the staged files before publishing.
 
 To export a new source archive:
 
@@ -177,9 +179,9 @@ To export a new source archive:
 .\.venv\Scripts\python.exe scripts/check_release.py --archive dist/StudyRag-source-v0.1.0.zip
 ```
 
-The command refuses to overwrite an existing archive. PDFs, databases, chats,
-logs, model weights, environments, backups and working files are excluded from
-Git and source exports. Avoid uploading an unfiltered copy of the local folder.
+Choose a new filename for each archive. The export contains the public source
+and documentation. Git ignore rules and the export filter keep PDFs, databases,
+chats, logs, model weights, environments, backups and working files local.
 
 No project license has been assigned. Dependency and model terms still apply;
 see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -32,7 +32,7 @@ def bounded_history(value) -> tuple[dict[str, str], ...]:
         if size > remaining:
             if turns:
                 break
-            # A single long answer must not remove its question/topic entirely.
+            # Reserve space for the question and topic before trimming a long answer.
             allowance = max(0, remaining - len(turn["question"]) - len(turn["topic"]))
             turn["answer"] = turn["answer"][:allowance]
             size = sum(map(len, turn.values()))

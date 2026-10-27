@@ -1,4 +1,4 @@
-"""One study request per child process; stdin/stdout carry JSON, never shell code."""
+"""Handle a single study request over JSON stdin/stdout."""
 
 from collections.abc import Callable
 import contextlib
@@ -68,7 +68,7 @@ def main() -> int:
         request = json.loads(sys.stdin.readline())
         if not isinstance(request, dict):
             raise ValueError("Invalid study request")
-        # Model-library progress belongs on stderr, not in the JSON event stream.
+        # Route model-library output to stderr to keep stdout valid JSON.
         with contextlib.redirect_stdout(sys.stderr):
             run_request(request, emit)
     except Exception as error:

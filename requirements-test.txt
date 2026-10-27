@@ -1,4 +1,4 @@
-# Offline tests intentionally do not install OCR, Torch, Ollama or model weights.
+# Dependencies for the offline backend and Qt test suite.
 pytest>=8,<10
 numpy>=2,<3
 PyMuPDF>=1.24,<2

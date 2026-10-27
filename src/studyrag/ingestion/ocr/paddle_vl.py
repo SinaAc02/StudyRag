@@ -28,8 +28,8 @@ class PaddleOcrVlEngine:
         del languages  # PaddleOCR-VL is multilingual and detects language itself.
         try:
             # PaddleX imports ModelScope, which imports Torch. On Windows, loading
-            # CPU Torch after CUDA Paddle can produce a DLL collision, so establish
-            # the existing Torch runtime first.
+            # CPU Torch after CUDA Paddle can produce a DLL collision. Loading
+            # Torch first establishes its DLLs before Paddle initializes.
             import torch  # noqa: F401
             import paddle
             from paddleocr import PaddleOCRVL  # noqa: F401

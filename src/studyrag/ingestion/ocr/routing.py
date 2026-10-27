@@ -18,7 +18,7 @@ def apply_ocr_to_all_pages(
     *,
     force_all: bool = True,
 ) -> tuple[ExtractionResult, int]:
-    """Preserve native evidence; optionally route usable pages around OCR."""
+    """Apply OCR to selected pages and retain their native extraction."""
 
     updated_pages = []
     ocr_count = 0
@@ -57,7 +57,7 @@ def apply_ocr_to_all_pages(
 
 
 def ocr_reasons(page: ExtractedPage) -> tuple[str, ...]:
-    """Choose full-page OCR conservatively; character count alone is insufficient."""
+    """Select OCR candidates from text coverage, layout and visual-content flags."""
     reasons = list(page.visual_ocr_reasons)
     text = page.raw_text
     if assess_page(page).quality is not PageTextQuality.GOOD_NATIVE:
@@ -83,7 +83,7 @@ def apply_selective_ocr(
     page_offset: int = 0,
     total_pages: int | None = None,
 ) -> tuple[ExtractionResult, int]:
-    """Keep usable native blocks; lazily invoke OCR only for flagged pages."""
+    """Run OCR for flagged pages, loading the engine on demand."""
     return apply_ocr_to_all_pages(
         extraction,
         engine,

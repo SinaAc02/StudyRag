@@ -25,7 +25,7 @@ class _ScriptRecognizer:
         return getattr(self.latin, name)
 
     def __call__(self, images: Any, **kwargs: Any):
-        # Keep both inference calls at batch size 1 and consume results promptly.
+        # Batch size 1 limits peak memory for each recognizer.
         for image in images:
             latin = list(self.latin([image], **kwargs))
             arabic = list(self.arabic([image], **kwargs))
@@ -35,7 +35,7 @@ class _ScriptRecognizer:
 
 
 class _ScriptAwareLayout:
-    """Avoid sending confidently recognized Persian sentences to formula OCR."""
+    """Reclassify confident Persian sentence detections as text."""
 
     def __init__(self, detector: Any, ocr: Any) -> None:
         self.detector = detector
@@ -93,7 +93,7 @@ class PaddleStructureEngine:
     def validate(self, languages: tuple[str, ...]) -> None:
         if set(languages) - {"fas", "eng", "deu"}:
             raise OcrUnavailableError("The OCR backend supports Persian, English and German.")
-        # Set before importing Paddle. These apply to the OCR child process only.
+        # Paddle reads these settings on import in the OCR child process.
         os.environ.setdefault("PADDLE_PDX_CACHE_HOME", str(PROJECT_ROOT / "models/paddlex"))
         os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
         os.environ.setdefault("FLAGS_allocator_strategy", "auto_growth")
@@ -163,16 +163,16 @@ class PaddleStructureEngine:
                 use_doc_unwarping=False,
                 use_textline_orientation=False,
             )
-            # PaddleOCR 3.7 has one recognizer slot. Share the detector, layout,
-            # table and formula models while adding the other small script model.
-            # The internal assignment is version-specific; pin 3.7 in pyproject.
+            # PaddleOCR 3.7 has one recognizer slot. Both scripts share the
+            # detector, layout, table and formula models. These internal slots
+            # match the PaddleOCR 3.7 range in pyproject.toml.
             ocr = pipeline.paddlex_pipeline.general_ocr_pipeline
             internal_ocr = getattr(ocr, "_pipeline", ocr)
             latin = internal_ocr.text_rec_model
             arabic = create_model("arabic_PP-OCRv5_mobile_rec", device=self.device, batch_size=1)
             internal_ocr.text_rec_model = _ScriptRecognizer(latin, arabic)
-            # Table cell repair otherwise lazily builds a second, default
-            # Chinese/English server OCR pipeline. Reuse our bilingual one.
+            # Sharing the bilingual pipeline also covers table cell repair,
+            # whose default is a separate Chinese/English server OCR pipeline.
             table = pipeline.paddlex_pipeline.table_recognition_pipeline
             internal_table = getattr(table, "_pipeline", table)
             internal_table.general_ocr_pipeline = ocr

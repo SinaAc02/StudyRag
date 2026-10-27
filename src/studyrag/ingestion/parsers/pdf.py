@@ -54,7 +54,7 @@ class NativePdfParser:
 
 
 def _visual_ocr_reasons(page, layout, images, drawings) -> tuple[str, ...]:
-    """Conservatively retain visual parsing for substantive non-text content."""
+    """Flag images, vector graphics and math content for visual extraction."""
     reasons = []
     page_area = max(page.rect.get_area(), 1)
 
@@ -64,7 +64,7 @@ def _visual_ocr_reasons(page, layout, images, drawings) -> tuple[str, ...]:
 
     if any(substantial(image["bbox"]) for image in images):
         reasons.append("substantial_image")
-    # Ignore simple page-sized background fills/borders, not diagram components.
+    # Simple page-sized fills and borders are backgrounds; smaller shapes may be diagrams.
     content_drawings = [
         drawing
         for drawing in drawings

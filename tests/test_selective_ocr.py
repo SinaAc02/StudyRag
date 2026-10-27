@@ -191,7 +191,7 @@ def test_native_and_mixed_libraries_validate_activate_and_remain_fresh(tmp_path,
     coordinator._activate_staging()
     assert coordinator._is_fresh() is True
 
-    # Readiness must reject partially processed or inconsistent page provenance.
+    # Each mutation below represents incomplete or inconsistent page provenance.
     with sqlite3.connect(active) as connection:
         connection.execute("UPDATE pages SET ocr_engine = NULL WHERE text_source = 'ocr'")
         if not mixed:

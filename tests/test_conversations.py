@@ -34,7 +34,7 @@ def test_completed_conversations_survive_restart_and_are_separate_from_index(tmp
     assert restored.list("library-a") == [(identifier, "Explain sampling bias")]
     assert restored.list("library-b") == []
     assert index.read_bytes() == b"Original index"
-    # Replacing the document index cannot replace the independent chat database.
+    # Chats have their own database beside the replaceable document index.
     index.write_bytes(b"Rebuilt index")
     assert restored.turns(identifier)[0].sources[0]["page"] == 10
 

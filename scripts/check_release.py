@@ -1,4 +1,4 @@
-"""Audit the public source set and optionally export it without local data."""
+"""Audit public source files and export a source archive."""
 
 import argparse
 from pathlib import Path
@@ -102,7 +102,7 @@ def audit(root: Path) -> tuple[list[Path], list[str]]:
                 and entry.name not in {".coverage", "coverage.xml", "Thumbs.db", ".DS_Store"}
             ):
                 problems.append(f"{entry.name}: unreviewed top-level file")
-    # Ignore rules do not untrack files that were committed previously.
+    # Tracked files need a separate check because Git ignores apply to untracked files.
     if (root / ".git").exists():
         try:
             tracked = subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"])
@@ -138,7 +138,7 @@ def audit(root: Path) -> tuple[list[Path], list[str]]:
         for label, pattern in SECRET_PATTERNS.items():
             for match in pattern.finditer(text):
                 line = text.count("\n", 0, match.start()) + 1
-                # Report only location/type, never the matching credential.
+                # Credential findings contain locations and types, with values omitted.
                 problems.append(f"{relative}:{line}: possible {label}")
     for required in ("README.md", "pyproject.toml", "StudyRag.cmd", ".gitignore"):
         if not (root / required).is_file():
@@ -162,7 +162,7 @@ def main() -> int:
     if arguments.archive:
         archive = arguments.archive.resolve()
         archive.parent.mkdir(parents=True, exist_ok=True)
-        # Never overwrite an earlier release archive.
+        # Exclusive creation protects existing archives.
         with zipfile.ZipFile(archive, "x", zipfile.ZIP_DEFLATED) as output:
             for path in files:
                 output.write(path, Path("StudyRag") / path.relative_to(root))
