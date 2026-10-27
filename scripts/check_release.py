@@ -24,6 +24,7 @@ ROOT_FILES = {
     "CHANGELOG.md",
 }
 SOURCE_DIRECTORIES = {"src", "tests", "scripts", ".github", "docs"}
+DOCUMENTATION_IMAGES = {"docs/images/studyrag.png"}
 LOCAL_DIRECTORIES = {
     ".git",
     ".venv",
@@ -129,6 +130,11 @@ def audit(root: Path) -> tuple[list[Path], list[str]]:
             continue
         if path.stat().st_size > 2_000_000:
             problems.append(f"{relative}: unexpectedly large source file")
+            continue
+        if relative in DOCUMENTATION_IMAGES:
+            with path.open("rb") as image:
+                if image.read(8) != b"\x89PNG\r\n\x1a\n":
+                    problems.append(f"{relative}: invalid PNG image")
             continue
         try:
             text = path.read_text(encoding="utf-8-sig")

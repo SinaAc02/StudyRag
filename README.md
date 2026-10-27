@@ -7,6 +7,8 @@ ask for an explanation, compare topics or generate a quiz.
 
 Version 0.1.0 is an early release for Windows and Python 3.12.
 
+![StudyRag desktop showing a follow-up conversation and PDF sources](docs/images/studyrag.png)
+
 ## Setup
 
 You need 64-bit Python 3.12, a compatible NVIDIA GPU runtime and a running
